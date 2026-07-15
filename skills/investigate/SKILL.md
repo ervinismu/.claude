@@ -160,6 +160,14 @@ Files to create:
 1. `path/to/new_file` — purpose
 2. …
  
+## Implementation Conventions
+
+Rules the implementation MUST follow (the user's standing conventions — treat as hard requirements, not suggestions). Always include this section:
+- **Comments: terse, WHY-only.** 1–2 lines max, and only where the reason isn't obvious from the code. Do NOT add comments that restate what the code does, and none at all on self-explanatory code. This is the most common miss — keep comments sparse.
+- **No references in code** to issue/ticket numbers, plan/investigation docs, or tool names — in comments or identifiers.
+- **Full implementation** — no `TODO(human)` or placeholder stubs.
+- Follow the repo guidelines (`docs/guidelines/`, esp. `CODE_COMMENTS.md`) and match the surrounding file's existing comment density and idiom.
+
 ## Test Plan
 - How to verify the implementation works (automated tests + manual checks)
  
@@ -182,13 +190,25 @@ Files to create:
  
 Omit sections that don't apply. If there are no open questions, don't include that section. If no new files are needed, skip "Files to create." If the change is localized and doesn't affect architecture, skip "Architecture Overview." If no risky areas are identified, skip "Risk Flags." Always include "Complexity Estimate" — it takes one line and helps the user gauge review effort.
  
-## Step 5: STOP and Wait
+## Step 5: Save the Plan to a File
+
+Save the plan as markdown so it persists after the conversation ends. This is the one file this skill is allowed to create — it's documentation of the investigation, not production code.
+
+- **Location**: `docs/investigations/`. Create the directory if it doesn't exist.
+- **Filename**: `<slug>-<date>.md`, where:
+  - `<slug>` is the GitHub issue number plus a short kebab-case title (e.g. `123-add-bookmarks`) when working from an issue, or a short kebab-case slug derived from the task description (e.g. `add-dark-mode`) otherwise.
+  - `<date>` is today's date as `YYYY-MM-DD`. Get it with `date +%F` — don't guess it.
+- **Content**: The exact plan from Step 4, verbatim — don't summarize or trim it for the file.
+- After writing the file, tell the user the path you saved it to, then continue to Step 6.
+
+## Step 6: STOP and Wait
  
-After outputting the plan:
+After outputting the plan and saving it:
 - Do NOT start coding
-- Do NOT create or edit any files
+- Do NOT create or edit any other files
 - Ask: **"Does this plan look good? Any changes before I start?"**
 - Only proceed after explicit approval
+- If the user requests changes, update the saved file to match the revised plan (overwrite it) after presenting the revision.
 ### When the user says "no" or requests changes
  
 - **"Change the approach"**: Re-read the reference code with the user's feedback in mind. Search for additional patterns if the user pointed you toward a different analogy. Output a revised plan — don't patch the old one, rewrite the relevant sections cleanly.
