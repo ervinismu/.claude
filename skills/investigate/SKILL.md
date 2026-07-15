@@ -166,7 +166,7 @@ Rules the implementation MUST follow (the user's standing conventions — treat 
 - **Comments: terse, WHY-only.** 1–2 lines max, and only where the reason isn't obvious from the code. Do NOT add comments that restate what the code does, and none at all on self-explanatory code. This is the most common miss — keep comments sparse.
 - **No references in code** to issue/ticket numbers, plan/investigation docs, or tool names — in comments or identifiers.
 - **Full implementation** — no `TODO(human)` or placeholder stubs.
-- Follow the repo guidelines (`docs/guidelines/`, esp. `CODE_COMMENTS.md`) and match the surrounding file's existing comment density and idiom.
+- Follow the project's own contribution/style guidelines if any exist (e.g. a `CONTRIBUTING.md`, an `ARCHITECTURE.md`, a `docs/` guidelines folder, or `CLAUDE.md`), and match the surrounding file's existing comment density and idiom.
 
 ## Test Plan
 - How to verify the implementation works (automated tests + manual checks)
