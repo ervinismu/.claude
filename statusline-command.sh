@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line
-#   🤖 Opus 4.7 │ 📁 tsunagite-web ⎇ main │ 🧠 ███░░░░░░░ 32% │ 🕌 Asr 15:12 (in 1h05)
+#   🤖 Opus 4.7 │ 📁 awesome-web ⎇ main │ 🧠 ███░░░░░░░ 32% │ 🕌 Asr 15:12 (in 1h05)
 #
 # Requires: jq, curl, git
 # Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
