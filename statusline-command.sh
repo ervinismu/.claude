@@ -81,30 +81,38 @@ esac
 project=$(basename "$cwd")
 proj_seg="📁 ${BLUE}${project}${R}"
 
-if branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null); then
+# One `git status` call gives branch, upstream ahead/behind and file states.
+# --no-optional-locks: don't contend with git commands Claude is running.
+# timeout: on huge repos, fall back to just the branch name instead of stalling.
+gs=$(timeout 0.5 git -C "$cwd" --no-optional-locks status --porcelain=v2 --branch 2>/dev/null)
+gs_rc=$?
+if (( gs_rc == 0 )) && [[ -n "$gs" ]]; then
+  branch="" oid="" ahead=0 behind=0 staged=0 modified=0 untracked=0
+  while IFS= read -r line; do
+    case "$line" in
+      "# branch.head "*) branch=${line#\# branch.head } ;;
+      "# branch.oid "*)  oid=${line#\# branch.oid } ;;
+      "# branch.ab "*)   read -r _ _ ahead behind <<<"$line"; ahead=${ahead#+}; behind=${behind#-} ;;
+      [12u]" "*)         xy=${line:2:2}
+                         [[ ${xy:0:1} != "." ]] && (( staged++ ))
+                         [[ ${xy:1:1} != "." ]] && (( modified++ )) ;;
+      "? "*)             (( untracked++ )) ;;
+    esac
+  done <<<"$gs"
+  [[ "$branch" == "(detached)" ]] && branch="${oid:0:7}"
   proj_seg+=" ⎇ ${MAGENTA}${branch}${R}"
 
   # working tree: ●modified ✚staged ?untracked
-  status=$(git -C "$cwd" status --porcelain 2>/dev/null)
-  if [[ -n "$status" ]]; then
-    staged=$(grep -c '^[MADRC]' <<<"$status")
-    modified=$(grep -c '^.[MD]' <<<"$status")
-    untracked=$(grep -c '^??' <<<"$status")
-    git_seg=""
-    (( modified  > 0 )) && git_seg+=" ${YELLOW}●${modified}${R}"
-    (( staged    > 0 )) && git_seg+=" ${GREEN}✚${staged}${R}"
-    (( untracked > 0 )) && git_seg+=" ${DIM}?${untracked}${R}"
-    proj_seg+="$git_seg"
-  fi
+  (( modified  > 0 )) && proj_seg+=" ${YELLOW}●${modified}${R}"
+  (( staged    > 0 )) && proj_seg+=" ${GREEN}✚${staged}${R}"
+  (( untracked > 0 )) && proj_seg+=" ${DIM}?${untracked}${R}"
 
-  # ahead/behind upstream
-  if ab=$(git -C "$cwd" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null); then
-    behind=${ab%%	*}; ahead=${ab##*	}
-    (( ahead  > 0 )) && proj_seg+=" ${CYAN}↑${ahead}${R}"
-    (( behind > 0 )) && proj_seg+=" ${RED}↓${behind}${R}"
-  else
-    proj_seg+=" ${DIM}⇡?${R}"   # no upstream set
-  fi
+  # ahead/behind upstream (shown only when there is something to push/pull)
+  (( ahead  > 0 )) && proj_seg+=" ${CYAN}↑${ahead}${R}"
+  (( behind > 0 )) && proj_seg+=" ${RED}↓${behind}${R}"
+elif (( gs_rc == 124 )) && branch=$(git -C "$cwd" symbolic-ref --short -q HEAD 2>/dev/null \
+                                    || git -C "$cwd" rev-parse --short HEAD 2>/dev/null); then
+  proj_seg+=" ⎇ ${MAGENTA}${branch}${R} ${DIM}…${R}"   # status timed out
 fi
 
 # ---------- context window ----------
