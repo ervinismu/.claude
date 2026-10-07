@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Claude Code status line (two lines)
-#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🕌 Asr 14:39 (in 2h10)
-#   🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ ⏳ 5h 28% · 7d 61%
+# Claude Code status line (one line)
+#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ ⏳ 5h 28% · 7d 61% │ 🕌 Asr 14:39 (in 2h10)
 #
 # Requires: jq, curl, git
 # Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
@@ -134,7 +133,5 @@ if [[ -s "$pfile" ]]; then
   prayer_seg="🕌 ${pcolor}${pname/+1/ (tomorrow)} ${ptime}${R} ${DIM}(in ${left})${R}"
 fi
 
-# ---------- output (two lines) ----------
-printf '%s\n%s' \
-  "${proj_seg}${SEP}${prayer_seg}" \
-  "🤖 ${model}${SEP}${ctx_seg}${SEP}${limit_seg}"
+# ---------- output (one line) ----------
+printf '%s' "${proj_seg}${SEP}🤖 ${model}${SEP}${ctx_seg}${SEP}${limit_seg}${SEP}${prayer_seg}"
