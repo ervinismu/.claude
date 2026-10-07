@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line (one line)
-#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% ↻18:30 · 7d 61% ↻Thu 9 │ 🕌 Asr 14:39 (in 2h10)
+#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 · med │ 🧠 ███░░░░░░░ 32% (64k) │ ❄ 16:52 │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% ↻18:30 · 7d 61% ↻Thu 9 │ 🕌 Asr 14:39 (in 2h10)
 #
 # Requires: jq, curl, git
 # Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
@@ -41,11 +41,43 @@ fmt_k() { local n=${1%.*}; (( n >= 1000 )) && printf '%dk' $(( n / 1000 )) || pr
 
 input=$(cat)
 
-# ---------- model ----------
-model=$(jq -r '.model.display_name // "Claude"' <<<"$input")
+# ---------- parse input (single jq call; "-" marks a missing value) ----------
+IFS=$'\t' read -r model cwd used tokens cost added removed \
+    five five_reset week week_reset effort fast cache_warm cache_exp < <(jq -r '
+  [ .model.display_name // "Claude",
+    .workspace.current_dir // .cwd // ".",
+    .context_window.used_percentage,
+    (.context_window.current_usage
+      | if . then (.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0) else null end),
+    .cost.total_cost_usd,
+    .cost.total_lines_added // 0,
+    .cost.total_lines_removed // 0,
+    .rate_limits.five_hour.used_percentage,
+    .rate_limits.five_hour.resets_at,
+    .rate_limits.seven_day.used_percentage,
+    .rate_limits.seven_day.resets_at,
+    .effort.level,
+    .fast_mode,
+    .prompt_cache.warm,
+    .prompt_cache.expires_at
+  ] | map(if . == null or . == "" then "-" else tostring end) | @tsv' <<<"$input" 2>/dev/null)
+for v in model cwd used tokens cost added removed five five_reset week week_reset \
+         effort fast cache_warm cache_exp; do
+  [[ ${!v} == "-" ]] && printf -v "$v" ''
+done
+[[ -z "$model" ]] && model="Claude"
+[[ -z "$cwd"   ]] && cwd="."
+printf -v now_epoch '%(%s)T' -1
+
+# ---------- model + effort + fast mode ----------
+model_seg="🤖 ${model}"
+case "$effort" in
+  medium) effort="med" ;;
+esac
+[[ -n "$effort" ]] && model_seg+=" ${DIM}·${R} ${effort}"
+[[ "$fast" == "true" ]] && model_seg+=" ${YELLOW}⚡${R}"
 
 # ---------- project + branch + git state ----------
-cwd=$(jq -r '.workspace.current_dir // .cwd // "."' <<<"$input")
 project=$(basename "$cwd")
 proj_seg="📁 ${BLUE}${project}${R}"
 
@@ -76,39 +108,42 @@ if branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null); then
 fi
 
 # ---------- context window ----------
-used=$(jq -r '.context_window.used_percentage // empty' <<<"$input")
+ctx_seg=""
 if [[ -n "$used" ]]; then
-  tokens=$(jq -r '.context_window.current_usage
-      | ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0))' <<<"$input" 2>/dev/null)
   tok_str=""; [[ -n "$tokens" && "$tokens" != "0" ]] && tok_str=" ${DIM}($(fmt_k "$tokens"))${R}"
   warn=""; (( ${used%.*} >= 80 )) && warn=" ⚠️"
   ctx_seg="🧠 $(pct_color "$used")$(bar "$used") ${used%.*}%${R}${tok_str}${warn}"
-else
-  ctx_seg=""
+fi
+
+# ---------- prompt cache: clock time it expires (stays correct while idle) ----------
+cache_seg=""
+if [[ -n "$cache_exp" ]]; then
+  if [[ "$cache_warm" == "true" ]] && (( ${cache_exp%.*} > now_epoch )); then
+    printf -v exp_hm '%(%H:%M)T' "${cache_exp%.*}"
+    ccolor=$CYAN; (( ${cache_exp%.*} - now_epoch <= 300 )) && ccolor=$YELLOW
+    cache_seg="❄ ${ccolor}${exp_hm}${R}"
+  else
+    cache_seg="❄ ${DIM}cold${R}"
+  fi
 fi
 
 # ---------- session cost + lines changed ----------
-read -r cost added removed < <(jq -r '.cost
-    | "\(.total_cost_usd // "-") \(.total_lines_added // 0) \(.total_lines_removed // 0)"' <<<"$input" 2>/dev/null)
 cost_seg=""
-[[ -n "$cost" && "$cost" != "-" ]] && cost_seg="💰 $(printf '$%.2f' "$cost")"
+[[ -n "$cost" ]] && printf -v cost_seg '💰 $%.2f' "$cost"
 if (( ${added:-0} > 0 || ${removed:-0} > 0 )); then
   cost_seg+="${cost_seg:+ }${GREEN}+${added}${R} ${RED}−${removed}${R}"
 fi
 
 # ---------- rate limits (Pro/Max; empty until first response) ----------
-five=$(jq -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
-week=$(jq -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
-five_reset=$(jq -r '.rate_limits.five_hour.resets_at // empty' <<<"$input")
-week_reset=$(jq -r '.rate_limits.seven_day.resets_at // empty' <<<"$input")
 # epoch -> " ↻18:30" if today, else " ↻Thu 9"
 fmt_reset() {
   [[ -z "$1" ]] && return
-  if [[ $(date -d "@$1" +%F) == $(date +%F) ]]; then
-    printf ' %s↻%s%s' "$DIM" "$(date -d "@$1" +%H:%M)" "$R"
-  else
-    printf ' %s↻%s%s' "$DIM" "$(date -d "@$1" "+%a %-d")" "$R"
+  local day today hm
+  printf -v day '%(%F)T' "${1%.*}"; printf -v today '%(%F)T' -1
+  if [[ "$day" == "$today" ]]; then printf -v hm '%(%H:%M)T' "${1%.*}"
+  else                              printf -v hm '%(%a %-d)T' "${1%.*}"
   fi
+  printf ' %s↻%s%s' "$DIM" "$hm" "$R"
 }
 limit_seg=""
 [[ -n "$five" ]] && limit_seg+="${DIM}5h${R} $(pct_color "$five")${five%.*}%${R}$(fmt_reset "$five_reset")"
@@ -161,7 +196,7 @@ fi
 # ---------- output (one line) ----------
 # empty segments are skipped so no dangling separators
 out=""
-for seg in "$proj_seg" "🤖 ${model}" "$ctx_seg" "$cost_seg" "$limit_seg" "$prayer_seg"; do
+for seg in "$proj_seg" "$model_seg" "$ctx_seg" "$cache_seg" "$cost_seg" "$limit_seg" "$prayer_seg"; do
   [[ -n "$seg" ]] && out+="${out:+$SEP}${seg}"
 done
 printf '%s' "$out"
