@@ -3,8 +3,8 @@
 #   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 · med │ 🧠 ███░░░░░░░ 32% (64k) │ ❄ 16:52 │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% ↻18:30 · 7d 61% ↻Thu 9 │ 🕌 Asr 14:39 (in 2h10)
 #
 # Requires: jq, curl, git
-# Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
-#   { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }
+# Setup:    chmod +x ~/.claude/statusline-command.sh, then add to ~/.claude/settings.json:
+#   { "statusLine": { "type": "command", "command": "bash ~/.claude/statusline-command.sh" } }
 
 # ---------- config ----------
 CITY="${PRAYER_CITY:-Yogyakarta}"
