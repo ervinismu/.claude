@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line (one line)
-#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% · 7d 61% │ 🕌 Asr 14:39 (in 2h10)
+#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% ↻18:30 · 7d 61% ↻Thu 9 │ 🕌 Asr 14:39 (in 2h10)
 #
 # Requires: jq, curl, git
 # Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
@@ -99,9 +99,20 @@ fi
 # ---------- rate limits (Pro/Max; empty until first response) ----------
 five=$(jq -r '.rate_limits.five_hour.used_percentage // empty' <<<"$input")
 week=$(jq -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
+five_reset=$(jq -r '.rate_limits.five_hour.resets_at // empty' <<<"$input")
+week_reset=$(jq -r '.rate_limits.seven_day.resets_at // empty' <<<"$input")
+# epoch -> " ↻18:30" if today, else " ↻Thu 9"
+fmt_reset() {
+  [[ -z "$1" ]] && return
+  if [[ $(date -d "@$1" +%F) == $(date +%F) ]]; then
+    printf ' %s↻%s%s' "$DIM" "$(date -d "@$1" +%H:%M)" "$R"
+  else
+    printf ' %s↻%s%s' "$DIM" "$(date -d "@$1" "+%a %-d")" "$R"
+  fi
+}
 limit_seg=""
-[[ -n "$five" ]] && limit_seg+="${DIM}5h${R} $(pct_color "$five")${five%.*}%${R}"
-[[ -n "$week" ]] && limit_seg+="${limit_seg:+ ${DIM}·${R} }${DIM}7d${R} $(pct_color "$week")${week%.*}%${R}"
+[[ -n "$five" ]] && limit_seg+="${DIM}5h${R} $(pct_color "$five")${five%.*}%${R}$(fmt_reset "$five_reset")"
+[[ -n "$week" ]] && limit_seg+="${limit_seg:+ ${DIM}·${R} }${DIM}7d${R} $(pct_color "$week")${week%.*}%${R}$(fmt_reset "$week_reset")"
 [[ -n "$limit_seg" ]] && limit_seg="⏳ ${limit_seg}"
 
 # ---------- prayer time (Aladhan API, cached per day) ----------
