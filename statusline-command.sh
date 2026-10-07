@@ -32,7 +32,10 @@ pct_color() {
 bar() {
   local p=${1%.*} f e
   f=$(( p / 10 )); e=$(( 10 - f ))
-  printf '%*s' "$f" '' | tr ' ' '█'; printf '%*s' "$e" '' | tr ' ' '░'
+  local out="" i
+  for (( i = 0; i < f; i++ )); do out+='█'; done
+  for (( i = 0; i < e; i++ )); do out+='░'; done
+  printf '%s' "$out"
 }
 # 64230 -> 64k
 fmt_k() { local n=${1%.*}; (( n >= 1000 )) && printf '%dk' $(( n / 1000 )) || printf '%d' "$n"; }
