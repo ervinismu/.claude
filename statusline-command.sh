@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code status line (one line)
-#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ ⏳ 5h 28% · 7d 61% │ 🕌 Asr 14:39 (in 2h10)
+#   📁 awesome-web ⎇ issues/4532-confirm ●2 ✚1 ?3 ↑1 │ 🤖 Opus 5.5 │ 🧠 ███░░░░░░░ 32% (64k) │ 💰 $1.24 +120 −35 │ ⏳ 5h 28% · 7d 61% │ 🕌 Asr 14:39 (in 2h10)
 #
 # Requires: jq, curl, git
 # Setup:    chmod +x ~/.claude/statusline.sh, then add to ~/.claude/settings.json:
@@ -84,7 +84,16 @@ if [[ -n "$used" ]]; then
   warn=""; (( ${used%.*} >= 80 )) && warn=" ⚠️"
   ctx_seg="🧠 $(pct_color "$used")$(bar "$used") ${used%.*}%${R}${tok_str}${warn}"
 else
-  ctx_seg="🧠 ${DIM}--${R}"
+  ctx_seg=""
+fi
+
+# ---------- session cost + lines changed ----------
+read -r cost added removed < <(jq -r '.cost
+    | "\(.total_cost_usd // "-") \(.total_lines_added // 0) \(.total_lines_removed // 0)"' <<<"$input" 2>/dev/null)
+cost_seg=""
+[[ -n "$cost" && "$cost" != "-" ]] && cost_seg="💰 $(printf '$%.2f' "$cost")"
+if (( ${added:-0} > 0 || ${removed:-0} > 0 )); then
+  cost_seg+="${cost_seg:+ }${GREEN}+${added}${R} ${RED}−${removed}${R}"
 fi
 
 # ---------- rate limits (Pro/Max; empty until first response) ----------
@@ -93,12 +102,15 @@ week=$(jq -r '.rate_limits.seven_day.used_percentage // empty' <<<"$input")
 limit_seg=""
 [[ -n "$five" ]] && limit_seg+="${DIM}5h${R} $(pct_color "$five")${five%.*}%${R}"
 [[ -n "$week" ]] && limit_seg+="${limit_seg:+ ${DIM}·${R} }${DIM}7d${R} $(pct_color "$week")${week%.*}%${R}"
-limit_seg="⏳ ${limit_seg:-${DIM}--${R}}"
+[[ -n "$limit_seg" ]] && limit_seg="⏳ ${limit_seg}"
 
 # ---------- prayer time (Aladhan API, cached per day) ----------
 today=$(date +%Y-%m-%d)
 pfile="$CACHE_DIR/prayer-${CITY// /_}-${today}.json"
-if [[ ! -s "$pfile" ]]; then
+failmark="$CACHE_DIR/prayer-fetch-failed"
+# after a failed fetch, wait 30 min before retrying so offline renders stay fast
+recent_fail=$(find "$failmark" -mmin -30 2>/dev/null)
+if [[ ! -s "$pfile" && -z "$recent_fail" ]]; then
   find "$CACHE_DIR" -name 'prayer-*.json' -mtime +1 -delete 2>/dev/null
   # -L: the API redirects to a date-specific URL, so redirects must be followed
   if curl -sfLG --connect-timeout 5 --max-time 10 \
@@ -107,13 +119,15 @@ if [[ ! -s "$pfile" ]]; then
         --data-urlencode "method=$METHOD" -o "$pfile.tmp" 2>>"$CACHE_DIR/error.log" \
      && jq -e '.data.timings' "$pfile.tmp" >/dev/null 2>&1; then
     mv "$pfile.tmp" "$pfile"
+    rm -f "$failmark"
   else
     echo "$(date) fetch failed (city=$CITY country=$COUNTRY method=$METHOD)" >>"$CACHE_DIR/error.log"
     rm -f "$pfile.tmp"
+    touch "$failmark"
   fi
 fi
 
-prayer_seg="🕌 ${DIM}--${R}"
+prayer_seg=""
 if [[ -s "$pfile" ]]; then
   now=$(date +%H:%M)
   read -r pname ptime < <(jq -r --arg now "$now" '
@@ -134,4 +148,9 @@ if [[ -s "$pfile" ]]; then
 fi
 
 # ---------- output (one line) ----------
-printf '%s' "${proj_seg}${SEP}🤖 ${model}${SEP}${ctx_seg}${SEP}${limit_seg}${SEP}${prayer_seg}"
+# empty segments are skipped so no dangling separators
+out=""
+for seg in "$proj_seg" "🤖 ${model}" "$ctx_seg" "$cost_seg" "$limit_seg" "$prayer_seg"; do
+  [[ -n "$seg" ]] && out+="${out:+$SEP}${seg}"
+done
+printf '%s' "$out"
